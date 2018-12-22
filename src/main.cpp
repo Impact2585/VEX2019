@@ -105,7 +105,21 @@ void autoDriveForward( float inches, float power ) { // distance in inches
     LeftBackMotor.startRotateFor(degreesTurn, rotationUnits::deg, power, velocityUnits::pct);
     RightFrontMotor.startRotateFor(degreesTurn, rotationUnits::deg, power, velocityUnits::pct);
     RightBackMotor.rotateFor(degreesTurn, rotationUnits::deg, power, velocityUnits::pct);
-}    
+}  
+
+void autoDriveForwardRaw(float power, float time){
+    LeftBackMotor.spin(directionType::fwd, power, velocityUnits::pct);
+    LeftFrontMotor.spin(directionType::fwd, power, velocityUnits::pct);
+
+    RightBackMotor.spin(directionType::fwd, power, velocityUnits::pct);
+    RightFrontMotor.spin(directionType::fwd, power, velocityUnits::pct);
+    task::sleep(time * 1000);
+    LeftBackMotor.stop(brakeType::brake);
+    RightBackMotor.stop(brakeType::brake);
+    LeftFrontMotor.stop(brakeType::brake);
+    RightFrontMotor.stop(brakeType::brake);
+
+}
 
 void autoTurn( float degrees ) {
     // Note: +90 degrees is a right turn
@@ -177,6 +191,35 @@ void pointTo(vision::signature sig) {
             return;
         }
     }
+    return;
+}
+
+void pointTo(vision::code sig) {
+    //camera image is 316 pixels wide, so the center is 316/2
+    int screenMiddleX = 316 / 2;
+    bool isLinedUp = false;
+    while(!isLinedUp) {
+        //snap a picture
+        VisionSensor.takeSnapshot(sig);
+        //did we see anything?
+        if(VisionSensor.objectCount > 0) {
+            //where was the largest thing?
+            if(VisionSensor.largestObject.centerX < screenMiddleX - 5) {
+                //on the left, turn left
+                runDriveArcade(0, -10, false);
+            } else if (VisionSensor.largestObject.centerX > screenMiddleX + 5) {
+                //on the right, turn right
+                runDriveArcade(0, 10, false);
+            } else {
+                //in the middle, we're done lining up
+                isLinedUp = true;
+                runDriveArcade(0, 0, false);
+            }
+        } else {
+            return;
+        }
+    }
+    return;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -191,49 +234,91 @@ void autonomous( void ) {
     if (NO_AUTON) return;
     
     if(isFront){
-        // Spin up while driving to flag
         ShooterMotor.spin(directionType::fwd, 100, velocityUnits::pct);
-        autoDriveForward(24, 25);
-        task::sleep(3000);
+        autoDriveForward(24, 50);
 
+        IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+        autoDriveForward(18, 50);
+        task::sleep(500);
+        IntakeMotor.stop(brakeType::coast);
+        autoDriveForward(-42, 50);
+        autoDriveForwardRaw(-25, 0.5);
+        autoDriveForward(6, 50);
+        if(isBlue){
+            autoTurn(90);
+        } else {
+            autoTurn(-90);
+        }
         // Run the intake and feeder to shoot
         IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
-        Feeder.startRotateFor(10, rotationUnits::rev, 60, velocityUnits::pct);
-        task::sleep(2000);
+        Feeder.startRotateFor(10, rotationUnits::rev, 20, velocityUnits::pct);
+        task::sleep(750);
+        Feeder.stop(brakeType::coast);
+        autoDriveForward(30, 50);
+        Feeder.startRotateFor(10, rotationUnits::rev, 40, velocityUnits::pct);
+        task::sleep(1500);
         IntakeMotor.stop(brakeType::coast);
         Feeder.stop(brakeType::coast);
         ShooterMotor.stop(brakeType::coast);
         
-        // Drive forward to hit bottom flag
-        autoDriveForward(24, 30);
-        
-        // Drive back to get in position for parking
-        autoDriveForward(-24, 50);
-        autoDriveForward(-50, 100);
-        
-        // Turn to platform
+        if(isBlue){
+            autoDriveForward(-6, 50);
+        }   
         if(isBlue){
             autoTurn(-90);
-        } else { // red side
+        } else {
             autoTurn(90);
         }
-
-        // Raise arm for parking
-        ArmMotor.spin(directionType::rev, 20, velocityUnits::pct);
-        task::sleep(500);
-        ArmMotor.stop(brakeType::brake);
+        IntakeMotor.startRotateFor(-100, rotationUnits::rev, 100, velocityUnits::pct);
+        autoDriveForward(18, 25);
+        autoDriveForward(-18, 50);
+        autoDriveForwardRaw(-25, 2);
+        autoDriveForward(4, 50);
         
-        // Drive on to platform to park
-        autoDriveForward(-80, 100); // negative because the bot is backwards now
-
+        // Drive forward to hit bottom flag
+        if(isBlue){
+            autoTurn(90);
+        } else {
+            autoTurn(-90);
+        }
+        pointTo(GREEN_FLAG);
+        autoDriveForward(48, 50);
     } else { // in the back
-        // Drive straight to intake ball beneath disk
-        runIntake(127.0);        
-        autoDriveForward( 3.3 * 12, 50.0 );
-        IntakeMotor.rotateFor(2.0, vex::timeUnits::sec, 127.0, vex::velocityUnits::pct);
-        runIntake(0.0);
-        return;
+        ShooterMotor.spin(directionType::fwd, 100, velocityUnits::pct);
+        task::sleep(3000);
+        IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+        Feeder.startRotateFor(10, rotationUnits::rev, 15, velocityUnits::pct);
+        task::sleep(1000);
+        IntakeMotor.stop(brakeType::coast);
+        Feeder.stop(brakeType::coast);
+        ShooterMotor.stop(brakeType::coast);
+        if(isBlue){
+            autoTurn(-90);
+        } else {
+            autoTurn(90);
+        }
+        autoDriveForward(24, 50);
+        IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+        autoDriveForward(18, 50);
+        task::sleep(500);
+        IntakeMotor.stop(brakeType::coast);
+        autoDriveForward(-42, 65);
+        autoDriveForwardRaw(-6, 25);
+        autoDriveForward(6, 50);
+        if(isBlue){
+            autoTurn(90);
+        } else {
+            autoTurn(-90);
+        }
+        autoDriveForward(24, 50);
+        if(isBlue){
+            autoTurn(90);
+        } else {
+            autoTurn(-90);
+        }
+        autoDriveForward(-40, 100);
     }
+    return;
 }
 /*---------------------------------------------------------------------------*/
 /*                                                                           */
@@ -244,12 +329,80 @@ void autonomous( void ) {
 /*---------------------------------------------------------------------------*/
 
 void programmingSkills ( void ) {
-    // TODO: fill out
-    //autoTurn(90);
-    //autoTurn(-90);
+    ShooterMotor.spin(directionType::fwd, 100, velocityUnits::pct);
+    autoDriveForward(24, 50);
 
-    //autoDriveForward(12, 50);
-    //autoDriveForward(-12, 50);
+    IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+    autoDriveForward(18, 50);
+    task::sleep(500);
+    IntakeMotor.stop(brakeType::coast);
+    autoDriveForward(-42, 50);
+    autoDriveForwardRaw(-25, 0.5);
+    autoDriveForward(6, 50);
+    if(isBlue){
+        autoTurn(90);
+    } else {
+        autoTurn(-90);
+    }
+    // Run the intake and feeder to shoot
+    IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+    Feeder.startRotateFor(10, rotationUnits::rev, 20, velocityUnits::pct);
+    task::sleep(750);
+    Feeder.stop(brakeType::coast);
+    autoDriveForward(30, 50);
+    Feeder.startRotateFor(10, rotationUnits::rev, 40, velocityUnits::pct);
+    task::sleep(1500);
+    IntakeMotor.stop(brakeType::coast);
+    Feeder.stop(brakeType::coast);
+    ShooterMotor.stop(brakeType::coast);
+    if(isBlue){
+        autoDriveForward(-6, 50);
+    }   
+    if(isBlue){
+        autoTurn(-90);
+    } else {
+        autoTurn(90);
+    }
+    IntakeMotor.startRotateFor(-100, rotationUnits::rev, 100, velocityUnits::pct);
+    autoDriveForward(18, 25);
+    autoDriveForward(-18, 50);
+    autoDriveForwardRaw(-25, 1);
+    autoDriveForward(4, 50);
+
+    // Drive forward to hit bottom flag
+    if(isBlue){
+        autoTurn(90);
+    } else {
+        autoTurn(-90);
+    }
+    autoDriveForward(24, 50);
+    autoDriveForwardRaw(25, 1);
+    autoDriveForward(-96, 50);
+    if(isBlue){
+        autoTurn(-90);
+    } else {
+        autoTurn(90);
+    }
+    autoDriveForward(24, 50);
+    IntakeMotor.startRotateFor(100, rotationUnits::rev, 100, velocityUnits::pct);
+    autoDriveForward(18, 50);
+    task::sleep(500);
+    IntakeMotor.stop(brakeType::coast);
+    autoDriveForward(-42, 65);
+    autoDriveForwardRaw(-6, 25);
+    autoDriveForward(6, 50);
+    if(isBlue){
+        autoTurn(90);
+    } else {
+        autoTurn(-90);
+    }
+    autoDriveForward(24, 50);
+    if(isBlue){
+        autoTurn(90);
+    } else {
+        autoTurn(-90);
+    }
+    autoDriveForward(-40, 100);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -281,7 +434,6 @@ void usercontrol( void ) {
     Controller1.rumble("--..-");
 
     // Keep track of past button state to detect inital presses
-    bool wasIntakePressed = false;
     bool wasUpPressed = false;
     bool wasDownPressed = false;
     
@@ -296,6 +448,7 @@ void usercontrol( void ) {
         int rotationPCT = Controller1.Axis1.value() * 0.25;
 
         runDriveArcade(powerPCT, rotationPCT, isReversed);
+        
         // Tank Control
         /*
         float leftPCT = Controller1.Axis3.value();
@@ -346,16 +499,6 @@ void usercontrol( void ) {
             //...Stop spinning intake motor.
             runIntake(0);
         }
-        wasIntakePressed = Controller1.ButtonL1.pressing();
-
-        //Feeder Control
-        if(Controller1.ButtonA.pressing()) {
-            runFeeder(feederSpeedPCT);
-        } else if(Controller1.ButtonB.pressing()) {
-            runFeeder(-feederSpeedPCT);
-        } else {
-            runFeeder(0);
-        }
 
         //Feeder Control
         if(Controller1.ButtonA.pressing()) {
@@ -390,7 +533,7 @@ void usercontrol( void ) {
                ShooterMotor.spin(directionType::fwd, 0, velocityUnits::pct);
             }
         }
-
+        
         task::sleep(30); //Sleep the task for a short amount of time to prevent wasted resources. 
     }
 }
